@@ -8,12 +8,15 @@ uint8_t               TxData[8];
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
 
+#define Block_Id 0x00FEF70C
+
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN_Init(void);
 static void CAN_Filter_Init(void); //custom filter configuration
-static void CAN_Start(void); //start can & notification
-static void Send_CAN(uint32_t SID, uint32_t EID, uint32_t mDATA, uint32_t ID, uint32_t Dlen, uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7); //custom can send function
+static void CAN_Start(void); //custom start can & notification
+static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7); //custom create send data array
+static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8]); //custom can send function
 
 int main(void)
 {
@@ -27,7 +30,8 @@ int main(void)
 
   while (1)
   {
-	Send_CAN(0x321, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xA0, 0xA1);
+	Create_TxData(0xAA,0x00,0xCC,0xDD,0x00,0xFF,0x00,0x01);
+	Send_CAN(Block_Id,CAN_RTR_DATA,8,TxData);
 
 	HAL_Delay(1000);
   }
@@ -108,15 +112,19 @@ static void CAN_Start(void)
 	HAL_CAN_Start(&hcan);
 }
 
-static void Send_CAN(uint32_t SID, uint32_t EID, uint32_t mDATA, uint32_t ID, uint32_t Dlen, uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7)
+static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8])
 {
-	TxHeader.StdId = SID;
-	TxHeader.ExtId = EID;
-	TxHeader.RTR = mDATA;
-	TxHeader.IDE = ID;
+	TxHeader.ExtId = ExtID;
+	TxHeader.RTR = DATA_type;
+	TxHeader.IDE = CAN_ID_EXT;
 	TxHeader.DLC = Dlen;
 	TxHeader.TransmitGlobalTime = DISABLE;
 
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
+}
+
+static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7)
+{
 	TxData[0] = byte0;
 	TxData[1] = byte1;
 	TxData[2] = byte2;
@@ -125,8 +133,6 @@ static void Send_CAN(uint32_t SID, uint32_t EID, uint32_t mDATA, uint32_t ID, ui
 	TxData[5] = byte5;
 	TxData[6] = byte6;
 	TxData[7] = byte7;
-
-	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
 }
 
 void Error_Handler(void)
