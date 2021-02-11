@@ -8,7 +8,7 @@ uint8_t               TxData[8];
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
 
-#define Block_Id 0x00FEF70C
+#define Block_Id 0x00FEF70C //Testing Block ID
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
@@ -17,6 +17,7 @@ static void CAN_Filter_Init(void); //custom filter configuration
 static void CAN_Start(void); //custom start can & notification
 static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7); //custom create send data array
 static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8]); //custom can send function
+static void CAN_Transmite_manual(uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN); //function for retransmission CAN package
 
 int main(void)
 {
@@ -30,7 +31,7 @@ int main(void)
 
   while (1)
   {
-	Create_TxData(0xAA,0x00,0xCC,0xDD,0x00,0xFF,0x00,0x01);
+    Create_TxData(0xAA,0x12,0xCC,0xDD,0x35,0xFF,0x00,0x01);
 	Send_CAN(Block_Id,CAN_RTR_DATA,8,TxData);
 
 	HAL_Delay(1000);
@@ -90,26 +91,27 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 }
 
-static void CAN_Filter_Init(void)
+static void CAN_Filter_Init(void) //Filter disable for all packages can transmit in bus
 {
 	CAN_FilterTypeDef	CAN_Filter;
 
 	CAN_Filter.FilterBank = 0;
-	CAN_Filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-	CAN_Filter.FilterActivation = CAN_FILTER_ENABLE;
+	CAN_Filter.FilterFIFOAssignment = CAN_RX_FIFO0;
 	CAN_Filter.FilterMode = CAN_FILTERSCALE_32BIT;
 	CAN_Filter.FilterMode = CAN_FILTERMODE_IDMASK;
 	CAN_Filter.FilterIdHigh = 0x0000;
 	CAN_Filter.FilterIdLow = 0x0000;
 	CAN_Filter.FilterMaskIdHigh = 0x0000;
 	CAN_Filter.FilterMaskIdLow = 0x0000;
+	CAN_Filter.FilterActivation = CAN_FILTER_ENABLE;
 	HAL_CAN_ConfigFilter(&hcan, &CAN_Filter);
 }
 
 static void CAN_Start(void)
 {
-	HAL_CAN_ActivateNotification(&hcan, CAN_IT_TX_MAILBOX_EMPTY | CAN_IT_RX_FIFO0_MSG_PENDING);
 	HAL_CAN_Start(&hcan);
+	HAL_Delay(50); //Delay for CAN start
+	HAL_CAN_ActivateNotification(&hcan, CAN_IT_TX_MAILBOX_EMPTY | CAN_IT_RX_FIFO0_MSG_PENDING);
 }
 
 static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8])
@@ -133,6 +135,28 @@ static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t b
 	TxData[5] = byte5;
 	TxData[6] = byte6;
 	TxData[7] = byte7;
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
+	HAL_Delay(500);
+	CAN_Transmite_manual(RxHeader.ExtId,RxHeader.DLC,RxData);
+}
+
+void CAN_Transmite_manual(uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN)
+{
+	TxHeader.ExtId = ID_CAN;
+	TxHeader.DLC = DLC_CAN;
+	TxData[0] = DATA_CAN[0];
+	TxData[1] = DATA_CAN[1];
+	TxData[2] = DATA_CAN[2];
+	TxData[3] = DATA_CAN[3];
+	TxData[4] = DATA_CAN[4];
+	TxData[5] = DATA_CAN[5];
+	TxData[6] = DATA_CAN[6];
+	TxData[7] = DATA_CAN[7];
+	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
 }
 
 void Error_Handler(void)
