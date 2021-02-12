@@ -4,10 +4,6 @@ CAN_HandleTypeDef     hcan;
 CAN_TxHeaderTypeDef   TxHeader;
 CAN_RxHeaderTypeDef   RxHeader;
 
-uint8_t               TxData[8];
-uint8_t               RxData[8];
-uint32_t              TxMailbox;
-
 #define Block_Id 0x00FEF70C //Testing Block ID
 
 void SystemClock_Config(void);
@@ -15,9 +11,11 @@ static void MX_GPIO_Init(void);
 static void MX_CAN_Init(void);
 static void CAN_Filter_Init(void); //custom filter configuration
 static void CAN_Start(void); //custom start can & notification
-static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7); //custom create send data array
-static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8]); //custom can send function
-static void CAN_Transmite_manual(uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN); //function for retransmission CAN package
+static void Create_TxData(uint8_t *TxData, uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7); //custom create send data array
+static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t *TxData); //custom can send function
+static void CAN_Transmite_manual(uint8_t *TxData, uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN); //function for retransmission CAN package
+
+uint8_t TxData[8] = {0};
 
 int main(void)
 {
@@ -31,7 +29,9 @@ int main(void)
 
   while (1)
   {
-    Create_TxData(0xAA,0x12,0xCC,0xDD,0x35,0xFF,0x00,0x01);
+	uint8_t TxData[8] = {0};
+
+    Create_TxData(TxData,0xAA,0x12,0xCC,0xDD,0x35,0xFF,0x00,0x01);
 	Send_CAN(Block_Id,CAN_RTR_DATA,8,TxData);
 
 	HAL_Delay(1000);
@@ -114,8 +114,10 @@ static void CAN_Start(void)
 	HAL_CAN_ActivateNotification(&hcan, CAN_IT_TX_MAILBOX_EMPTY | CAN_IT_RX_FIFO0_MSG_PENDING);
 }
 
-static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t TxData[8])
+static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t *TxData)
 {
+	uint32_t TxMailbox = 0;
+
 	TxHeader.ExtId = ExtID;
 	TxHeader.RTR = DATA_type;
 	TxHeader.IDE = CAN_ID_EXT;
@@ -125,7 +127,7 @@ static void Send_CAN(uint32_t ExtID, uint32_t DATA_type, uint32_t Dlen, uint8_t 
 	HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
 }
 
-static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7)
+static void Create_TxData(uint8_t *TxData, uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7)
 {
 	TxData[0] = byte0;
 	TxData[1] = byte1;
@@ -139,13 +141,17 @@ static void Create_TxData(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t b
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
+	uint8_t RxData[8] = {0};
+
 	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
 	HAL_Delay(500);
-	CAN_Transmite_manual(RxHeader.ExtId,RxHeader.DLC,RxData);
+	CAN_Transmite_manual(TxData, RxHeader.ExtId,RxHeader.DLC,RxData);
 }
 
-void CAN_Transmite_manual(uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN)
+void CAN_Transmite_manual(uint8_t *TxData, uint16_t ID_CAN, uint8_t DLC_CAN, uint8_t *DATA_CAN)
 {
+	uint32_t TxMailbox = 0;
+
 	TxHeader.ExtId = ID_CAN;
 	TxHeader.DLC = DLC_CAN;
 	TxData[0] = DATA_CAN[0];

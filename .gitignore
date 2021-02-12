@@ -1,0 +1,10 @@
+#Binaries
+*.o
+*.bin
+
+#Misc
+*.su
+*.hex
+*.elf
+*.list
+*.map
