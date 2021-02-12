@@ -82,7 +82,7 @@ static void CAN_Start(void)
 	HAL_CAN_ActivateNotification(&hcan, CAN_IT_TX_MAILBOX_EMPTY | CAN_IT_RX_FIFO0_MSG_PENDING);
 }
 
-static void Send_CAN(uint32_t id, uint32_t data_type, uint32_t data_len, uint8_t *data)
+static void Send_CAN(uint32_t id, uint32_t data_len, uint8_t *data)
 {
 	uint32_t TxMailbox = 0;
 
